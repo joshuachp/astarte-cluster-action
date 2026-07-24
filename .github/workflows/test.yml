@@ -4,6 +4,14 @@ on:
   pull_request:
   push:
 
+# Spend CI time only on latest ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+
 jobs:
   deploy-astarte-test:
     runs-on: ubuntu-latest

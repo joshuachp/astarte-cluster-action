@@ -57,10 +57,10 @@ inputs:
 outputs:
   housekeeping_key:
     description: "The Housekeeping private key of the new cluster"
-    value: ${{ steps.load-housekeeping-key.outputs.housekeeping-key }}
+    value: ${{ steps.main.outputs.housekeeping-key }}
   realm_key:
     description: "The Realm private key of the newly created Realm."
-    value: ${{ steps.load-realm-key.outputs.realm-key }}
+    value: ${{ steps.main.outputs.realm-key }}
 
 runs:
   using: "composite"
@@ -91,115 +91,24 @@ runs:
         version: ${{ inputs.kind_version }}
         node_image: ${{ inputs.kind_node_image }}
         config: "${{ github.action_path }}/manifests/kind-config.yml"
-    - name: Ensure KinD is up
+    - name: Setup cluster
+      id: main
       shell: bash
-      run: |
-        echo "Waiting for KinD cluster to be ready..."
-
-        kubectl wait --namespace kube-system \
-        --for=condition=ready \
-        pod --all \
-        --timeout=90s
-
-        echo "KinD cluster is ready!"
-
-        kubectl cluster-info
-        kubectl get pods -n kube-system
-    - name: Install prerequisites
-      shell: bash
-      run: ${{ github.action_path }}/scripts/install-prerequisites.sh "${{ inputs.cert-manager_version }}" "${{ inputs.haproxy_version }}" "${{ inputs.rabbitmq_cluster_operator_version }}" "${{ inputs.scylla_operator_version }}" "${{ github.action_path }}"
-    - name: Install Astarte Operator
-      shell: bash
-      run: ${{ github.action_path }}/scripts/install-operator.sh "${{ inputs.astarte_chart_version }}"
-    - name: Setup Astarte Kubernetes namespace
-      shell: bash
-      run: kubectl create namespace "${{ inputs.astarte_namespace }}"
-    - name: Setup SSL Certificates
-      shell: bash
-      run: ${{ github.action_path }}/scripts/setup-ssl.sh "${{ github.action_path }}/certs/ca.json" "${{ github.action_path }}/certs/cert.json" "${{ inputs.astarte_namespace }}"
-    - name: Setup Astarte
       env:
+        CERT_MANAGER_VERSION: "${{ inputs.cert-manager_version }}"
+        HAPROXY_VERSION: "${{ inputs.haproxy_version }}"
+        RABBITMQ_OPERATOR_VERSION: "${{ inputs.rabbitmq_cluster_operator_version }}"
+        SCYLLA_OPERATOR_VERSION: "${{ inputs.scylla_operator_version }}"
+        ACTION_PATH: "${{ github.action_path }}"
+        ASTARTE_CHART_VERSION: "${{ inputs.astarte_chart_version }}"
+        ASTARTE_NAMESPACE: "${{ inputs.astarte_namespace }}"
         KUSTOMIZE_ASTARTE_PATCH: ${{ inputs.kustomize_astarte_patch }}
-      shell: bash
-      run: ${{ github.action_path }}/scripts/setup-astarte.sh "${{ inputs.astarte_version }}" "${{ inputs.astarte_namespace }}" "${{ github.action_path }}/manifests/adi.yml" "${{ github.action_path }}/manifests/broker-service.yml" "${{ github.action_path }}/manifests/astarte/" "${{ inputs.astartectl_version }}"
-    - name: Create Realm Keys
-      if: ${{ inputs.astarte_realm != '' }}
-      shell: bash
-      run: (cd "${{ github.action_path }}" && astartectl utils gen-keypair "${{ inputs.astarte_realm }}")
-    - id: load-realm-key
-      name: load-realm-key
-      if: ${{ inputs.astarte_realm != '' }}
-      shell: bash
-      env:
-        REALM_KEY: "${{ github.action_path }}/${{ inputs.astarte_realm }}_private.pem"
-      run: |
-        cat "$REALM_KEY"
-        {
-          echo 'realm-key<<EOF'
-          cat  "$REALM_KEY"
-          echo 'EOF'
-        } >> "$GITHUB_OUTPUT"
-    - name: Get housekeeping key
-      shell: bash
-      run: kubectl get secrets -n "${{ inputs.astarte_namespace }}" astarte-housekeeping-private-key -o jsonpath={.data.private-key} | base64 -d > "${{ github.action_path }}"/housekeeping_key.pem
-    - id: load-housekeeping-key
-      shell: bash
-      env:
-        HOUSEKEEPING_KEY: "${{ github.action_path }}/housekeeping_key.pem"
-      run: |
-        {
-          echo "housekeeping-key<<EOF"
-          cat "$HOUSEKEEPING_KEY"
-          echo 'EOF'
-        } >> "$GITHUB_OUTPUT"
-    - name: Wait for Astarte API to be ready
-      shell: bash
-      run: |
-        echo "Waiting for Astarte API to be ready..."
-        for i in {1..6}; do
-            if [[ -n $(astartectl housekeeping realms list --ignore-ssl-errors -u https://api.autotest.astarte-platform.org -k "${{ github.action_path }}/housekeeping_key.pem") ]]; then
-                echo "astartectl is able to connect to the Astarte API"
-                exit 0
-            else
-                sleep 5
-            fi
-        done
-
-        echo "astartectl failed to connect to the Astarte API"
-        exit 1
-    - name: Create Astarte Realm
-      if: ${{ inputs.astarte_realm != '' }}
-      shell: bash
-      run: astartectl housekeeping realms create -y "${{ inputs.astarte_realm }}" --ignore-ssl-errors -u https://api.autotest.astarte-platform.org --realm-public-key "${{ github.action_path }}/${{ inputs.astarte_realm }}_public.pem" -k "${{ github.action_path }}/housekeeping_key.pem"
-    - name: Wait for the realm creation to propagate
-      if: ${{ inputs.astarte_realm != '' }}
-      shell: bash
-      run: |
-        ASTARTE_REALM="${{ inputs.astarte_realm }}"
-
-        for i in {1..6}; do
-            if [[ -n $(astartectl housekeeping realms show "$ASTARTE_REALM" --ignore-ssl-errors -u https://api.autotest.astarte-platform.org -k "${{ github.action_path }}/housekeeping_key.pem") ]]; then
-                echo "Astarte Realm created successfully"
-                exit 0
-            else
-                sleep 5
-            fi
-        done
-
-        echo "Astarte Realm creation timed out"
-        exit 1
-    - name: create astartectl cluster and context (if needed)
-      shell: bash
-      run: |
-        export CLUSTER_NAME="$(kubectl config current-context)"
-        mkdir -p ~/.config/astarte
-        echo 'context: ""' >> ~/.config/astarte/astartectl.yaml
-        astartectl config clusters create $CLUSTER_NAME \
-          --api-url https://api.autotest.astarte-platform.org \
-          --housekeeping-key ${{ github.action_path }}/housekeeping_key.pem
-        export CONTEXT_NAME=$CLUSTER_NAME
-        astartectl config contexts create $CONTEXT_NAME \
-          --cluster $CLUSTER_NAME \
-          --realm-name ${{ inputs.astarte_realm }} \
-          --realm-private-key ${{ github.action_path }}/${{ inputs.astarte_realm }}_private.pem
-        astartectl config contexts update $CONTEXT_NAME --activate
+        CA_CERT_JSON: "${{ github.action_path }}/certs/ca.json"
+        SERVER_CERT_JSON: "${{ github.action_path }}/certs/cert.json"
+        ASTARTE_VERSION: "${{ inputs.astarte_version }}"
+        ADI_MANIFEST: "${{ github.action_path }}/manifests/adi.yml"
+        BROKER_MANIFEST: "${{ github.action_path }}/manifests/broker-service.yml"
+        ASTARTE_MANIFEST: "${{ github.action_path }}/manifests/astarte/"
+        ASTARTECTL_VERSION: "${{ inputs.astartectl_version }}"
+        ASTARTE_REALM: "${{ inputs.astarte_realm }}"
+      run: ${{ github.action_path }}/scripts/main.sh
