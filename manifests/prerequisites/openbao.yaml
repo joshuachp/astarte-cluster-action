@@ -1,0 +1,82 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openbao
+  labels:
+    app: openbao
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openbao
+  template:
+    metadata:
+      labels:
+        app: openbao
+    spec:
+      containers:
+        - name: openbao
+          image: "docker.io/openbao/openbao:2.5.5"
+          command:
+            - docker-entrypoint.sh
+            - server
+            - -dev
+          env:
+            - name: BAO_DEV_ROOT_TOKEN_ID
+              value: astarte_token
+            - name: BAO_DEV_LISTEN_ADDRESS
+              value: 0.0.0.0:8200
+          ports:
+            - containerPort: 8200
+              name: http
+              protocol: TCP
+          startupProbe:
+            exec:
+              command:
+                - bao
+                - status
+                - -address=http://127.0.0.1:8200
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - bao
+                - status
+                - -address=http://127.0.0.1:8200
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openbao
+  labels:
+    app: openbao
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8200
+      targetPort: 8200
+      protocol: TCP
+      name: http
+  selector:
+    app: openbao
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: astarte-vault-secret
+type: Opaque
+stringData:
+  token: astarte_token

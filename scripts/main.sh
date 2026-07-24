@@ -116,16 +116,16 @@ export CLUSTER_NAME
 export CONTEXT_NAME=$CLUSTER_NAME
 export HOUSEKEEPING_KEY="$ACTION_PATH/housekeeping_key.pem"
 
+echo "::group::Setup Astarte Kubernetes namespace"
+kubectl create namespace "$ASTARTE_NAMESPACE"
+echo "::endgroup::"
+
 echo "::group::Install prerequisites"
 . ./scripts/install-prerequisites.sh
 echo "::endgroup::"
 
 echo "::group::Install Astarte Operator"
 . ./scripts/install-operator.sh
-echo "::endgroup::"
-
-echo "::group::Setup Astarte Kubernetes namespace"
-kubectl create namespace "$ASTARTE_NAMESPACE"
 echo "::endgroup::"
 
 echo "::group::Setup SSL Certificates"
