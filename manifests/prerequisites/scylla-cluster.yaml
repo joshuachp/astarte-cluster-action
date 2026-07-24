@@ -14,16 +14,16 @@ spec:
   datacenter:
     name: local-kind-1
     racks:
-    - members: 1
-      name: local-kind-1a
-      scyllaConfig: scylladb-config
-      resources:
-        limits:
-          cpu: "500m"
-          memory: "1Gi"
-        requests:
-          cpu: "250m"
-          memory: "512Mi"
-      storage:
-        capacity: 5Gi
-        storageClassName: standard
+      - members: 1
+        name: local-kind-1a
+        scyllaConfig: scylladb-config
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+          requests:
+            cpu: "50m"
+            memory: "512Mi"
+        storage:
+          capacity: 5Gi
+          storageClassName: standard
