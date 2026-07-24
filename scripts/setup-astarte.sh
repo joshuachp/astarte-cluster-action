@@ -32,6 +32,10 @@ echo "Deploying Astarte"
 
 # Set the custom resource
 envsubst <"$ASTARTE_MANIFEST/astarte.tmpl.yaml" >"$ASTARTE_MANIFEST/astarte.yaml"
+# Disable FDO
+if [[ $DISABLE_FDO = true ]]; then
+    echo >"$ASTARTE_MANIFEST/kustomize-rv-openbao-patch.yaml"
+fi
 # Add the user patch
 echo "$KUSTOMIZE_ASTARTE_PATCH" >"$ASTARTE_MANIFEST/kustomize-astarte-patch.yaml"
 # Apply the final manifest

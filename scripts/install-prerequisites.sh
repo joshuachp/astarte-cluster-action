@@ -47,7 +47,7 @@ wait_haproxy() {
 install_rabbitmq() {
     # Install RabbitMQ Cluster Operator
     kubectl create namespace rabbitmq-system
-    kubectl apply --server-side -f https://github.com/rabbitmq/cluster-operator/releases/download/"$RABBITMQ_OPERATOR_VERSION"/cluster-operator.yml -n rabbitmq-system
+    kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/download/"$RABBITMQ_OPERATOR_VERSION"/cluster-operator.yml -n rabbitmq-system
 
     # Create a RabbitMQ cluster
     kubectl apply -n rabbitmq-system -f "$GITHUB_ACTION_PATH"/manifests/prerequisites/rabbitmq-cluster.yaml
@@ -129,14 +129,37 @@ wait_scylla_operator() {
         --timeout=300s || exit 1
 }
 
+install_rv_openbao() {
+    if [[ -n $DISABLE_FDO ]]; then
+        kubectl apply -n "$ASTARTE_NAMESPACE" -f "$GITHUB_ACTION_PATH/manifests/prerequisites/openbao.yaml"
+        kubectl apply -n "$ASTARTE_NAMESPACE" -f "$GITHUB_ACTION_PATH/manifests/prerequisites/rendezvous.yaml"
+    fi
+}
+
+wait_rv_openbao() {
+    if [[ -n $DISABLE_FDO ]]; then
+        kubectl wait --namespace "$ASTARTE_NAMESPACE" \
+            --for=condition=ready pod \
+            --selector=app=openbao \
+            --timeout=300s || exit 1
+
+        kubectl wait --namespace "$ASTARTE_NAMESPACE" \
+            --for=condition=ready pod \
+            --selector=app=fdo-rendezvous \
+            --timeout=300s || exit 1
+    fi
+}
+
 install_cert_manager
 install_haproxy
 install_rabbitmq
 install_scylla_operator
+install_rv_openbao
 
 wait_cert_manager
 wait_haproxy
 wait_rabbitmq
 wait_scylla_operator
+wait_rv_openbao
 
 echo "Dependencies installed successfully!"

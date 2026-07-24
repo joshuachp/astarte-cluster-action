@@ -1,0 +1,17 @@
+- op: add
+  path: /spec/fdo
+  value:
+    enable: true
+    rendezvousServer:
+      connection:
+        host: fdo-rendezvous.astarte.svc.cluster.local
+        port: 8041
+- op: add
+  path: /spec/vault
+  value:
+    connection:
+      host: openbao.astarte.svc.cluster.local
+      port: 8200
+      connectionStringSecret:
+        name: astarte-vault-secret
+        key: token

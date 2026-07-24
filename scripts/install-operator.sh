@@ -9,7 +9,10 @@ helm repo update
 # Install Astarte Operator
 helm install astarte-operator astarte/astarte-operator \
     -n astarte-operator --version "$ASTARTE_CHART_VERSION" \
-    --create-namespace || exit 1
+    --set "image.repository=$ASTARTE_OPERATOR_REPOSITORY" \
+    --set "image.tag=$ASTARTE_OPERATOR_TAG" \
+    --create-namespace ||
+    exit 1
 
 # Wait for Astarte Operator to settle
 echo "Waiting for Astarte Operator to be created..."

@@ -3,6 +3,13 @@ kind: Kustomization
 resources:
   - astarte.yaml
 patches:
+  # This patch is set by the Astarte Setup script if FDO is enabled
+  - path: kustomize-rv-openbao-patch.yaml
+    target:
+      group: api.astarte-platform.org
+      kind: Astarte
+      name: astarte
+      version: v2alpha1
   # This patch is set by the Astarte Setup script
   - path: kustomize-astarte-patch.yaml
     target:
